@@ -1,0 +1,11 @@
+# dsh-thinking-effort bundle 层：插入本插件的 loader 行。
+#
+# 为什么需要：dsh-client-modules 只扫 Host Loader 的 entry，包必须作为 loader 行挂载，
+# 它的 dsh.client 才会进入 __DSH_BOOT__ 图并被送进浏览器；同时插件管理器的
+# inspectionOf 硬性要求 package.json 声明 dsh.bundle。
+#
+# 互斥规则：本 bundle 层只在包被列入 profile 的 dsh.profile.bundles 时生效，
+# 不要同时在用户层再手工 insert 一条同 id 的行（新 loader 会抛 duplicate loader entry id）。
+- insert:
+    - id: thinking-effort
+      name: '@dsh-external/dsh-thinking-effort'

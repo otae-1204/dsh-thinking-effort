@@ -1,0 +1,44 @@
+{
+  "name": "@dsh-external/dsh-thinking-effort",
+  "version": "0.1.0",
+  "description": "在「设置 → Models」的提供商卡片（含添加提供商流程）中，为路由与每个模型声明思考强度档位",
+  "private": true,
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "bash scripts/build.sh"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ],
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "author": "otae-1204",
+  "contributors": [
+    "DeepSeek Harness <https://github.com/otae-1204>"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "reasoning-effort",
+    "thinking"
+  ],
+  "license": "MIT"
+}

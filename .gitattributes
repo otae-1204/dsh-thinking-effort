@@ -1,0 +1,15 @@
+# 统一行尾，避免 Windows 上的 CRLF 混进仓库。
+# 关键：scripts/build.sh 用 bash 执行，若带 CRLF 会在 Linux/macOS 上
+# 报 "\r: command not found" 而直接失败。
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
