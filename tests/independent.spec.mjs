@@ -2,7 +2,8 @@
 // 用法：node tests/independent.spec.mjs
 //
 // 与 Lead 的 panel.spec.mjs 的差异（刻意的）：
-//   * 宿主参考实现取 _staging/dsh-full（0.1.7-rc.1，与运行中的宿主同版本）；
+//   * 宿主参考实现取 _staging/dsh-full（0.1.7-rc.1 完整树；pi-ai/deepseek 适配器
+//     已换成运行中宿主的 0.2.0-rc.2 提取件，reasoning 语义区域两版相同）；
 //     Lead 的 loadpath.spec.mjs 取 _staging/kernel-full（0.1.6-alpha.2）。见 VERSION 段。
 //   * SlotCore 走**真实** dsh-client-ui-renderer 的 SlotRegistry（cordis Service），
 //     插件以**真实 cordis 插件**身份挂载（inject 由 cordis 满足、卸载由 fiber 回收），
@@ -510,7 +511,7 @@ function realPiAiAccepts(section) {
   const fullV = v(path.join(NM, '..', 'package.json'));
   const kernelNm = path.join(PKG, '..', '_staging', 'kernel-full', 'dsh', 'node_modules');
   const kernelV = v(path.join(kernelNm, '..', 'package.json'));
-  ok('VERSION: 本 spec 使用 dsh-full（与运行宿主同版本）', fullV === '0.1.7-rc.1', fullV);
+  ok('VERSION: 本 spec 使用 dsh-full 完整树（根 0.1.7-rc.1，适配器已同步 0.2.0-rc.2）', fullV === '0.1.7-rc.1', fullV);
   ok('VERSION: kernel-full 是另一版参考（Lead 的 loadpath.spec 取自它）', kernelV !== fullV, kernelV + ' vs ' + fullV);
   const rd = (p) => { try { return fs.readFileSync(p); } catch { return null; } };
   const same = (a, b) => { const x = rd(a), y = rd(b); return x && y && x.equals(y); };

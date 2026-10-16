@@ -1,8 +1,8 @@
 // 装载链路验证：客户端模块清单能否被真实 ClientModuleRegistry.resolveMeta 接受。
 //
 // ⚠️ 版本要求：resolveMeta 是宿主契约，必须针对**运行中宿主**的参考实现取证。
-// 实机 asar 的包版本为 0.1.7-rc.2（已逐包比对 _effref 与 asar：完全一致）。
-// 运行用 dsh-full（0.1.7-rc.1）；已实测其 dsh-client-modules 与 _effref 的**内容逐字节相同**，
+// 实机 asar 的包版本为 0.2.0-rc.2（已逐包比对 _effref 与 asar：完全一致）。
+// 运行用 dsh-full（0.1.7-rc.1）；已实测其 dsh-client-modules 与 _effref 的**内容逐字节相同**（两版该包内容未变），
 // 故结论适用于实机。保留版本自证，以便将来副本漂移时立即发现。
 //
 // 路径可用环境变量覆盖，便于在别的机器复现：
@@ -12,9 +12,9 @@ import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 const PKG = path.resolve(fileURLToPath(import.meta.url), '..', '..');
 // 候选按「与运行宿主一致性」排序：_effref 是从运行中 app.asar 提取的副本
-// （已逐包比对版本，0.1.7-rc.2，与实机 asar 一致）；dsh-full 是 0.1.7-rc.1；
+// （已逐包比对版本，0.2.0-rc.2，与实机 asar 一致）；dsh-full 是 0.1.7-rc.1；
 // kernel-full 是 0.1.6-alpha.2，只作最后兜底。
-// 说明：_effref（0.1.7-rc.2，与实机 asar 一致）是**裸提取副本**，缺依赖解析链
+// 说明：_effref（0.2.0-rc.2，与实机 asar 一致）是**裸提取副本**，缺依赖解析链
 // （其 lib/index.js import '@deepseek-ai/cordis' 无法解析），不能直接 import。
 // 故运行用完整树 dsh-full（0.1.7-rc.1）为主来源；已实测两者的 dsh-client-modules
 // **内容逐字节相同**（仅版本号标注不同），换源不影响结论。
@@ -33,7 +33,7 @@ const cm = await import(pathToFileURL(path.join(KERNEL, '@deepseek-ai', 'dsh-cli
 const kernelVer = JSON.parse(fs.readFileSync(path.join(KERNEL, '@deepseek-ai', 'dsh-client-modules', 'package.json'), 'utf8')).version;
 console.log('参考实现版本（dsh-client-modules）=' + kernelVer + '  取自 ' + KERNEL);
 if (!/^0\.1\.7/.test(kernelVer)) {
-  console.log('⚠️  警告：本次取证基于 ' + kernelVer + '，与运行中宿主（0.1.7-rc.2）不同版本；resolveMeta 断言可能不适用。');
+  console.log('⚠️  警告：本次取证基于 ' + kernelVer + '，与运行中宿主（0.2.0-rc.2）不同版本；resolveMeta 断言可能不适用。');
 }
 const proto = cm.ClientModuleRegistry.prototype;
 ok('ClientModuleRegistry 暴露 resolveMeta', typeof proto.resolveMeta === 'function', Object.getOwnPropertyNames(proto).join(','));

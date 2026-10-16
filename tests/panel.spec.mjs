@@ -2,7 +2,7 @@
 // 真实 applyPathOp 落盘 + 真实 pi-ai/deepseek Config 校验 + 真实 resolveModelReasoning 语义层。
 //
 // ⚠️ 取证一致性：全部参考实现**只取一处** —— 从运行中宿主的 app.asar 提取的 REF
-// （DSH_REF_DIR，默认 ../_effref，版本 0.1.7-rc.2）。不要混用 _staging 下的其他副本：
+// （DSH_REF_DIR，默认 ../_effref，版本 0.2.0-rc.2）。不要混用 _staging 下的其他副本：
 // 它们可能是别的版本（例如 kernel-full 是 0.1.6-alpha.2、dsh-full 是 0.1.7-rc.1），
 // 混用会让断言基于不同版本的契约。文件末尾有版本自证断言。
 //
@@ -20,9 +20,10 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 const PKG = path.resolve(fileURLToPath(import.meta.url), '..', '..');
 const REF = process.env.DSH_REF_DIR || path.join(PKG, '..', '_effref');
 // 两份来源，各有明确用途（避免此前「声明了却未用」的死代码与隐性混用）：
-//   REF  从运行中 app.asar 提取的副本（0.1.7-rc.2，已与 asar 逐包比对一致）：
+//   REF  从运行中 app.asar 提取的副本（0.2.0-rc.2，已与 asar 逐包比对一致）：
 //        用于 applyPathOp —— 它是**源码文本切取**求值，不需要依赖解析链。
-//   FULL 可运行的完整树（0.1.7-rc.1）：用于 import 适配器模块 —— REF 是裸副本，
+//   FULL 可运行的完整树（0.1.7-rc.1 根；pi-ai/deepseek 适配器已换成 0.2.0-rc.2
+//        提取件，两版该二包的 reasoning 语义区域相同，差异仅在 replay/兼容门/上传索引）：
 //        缺 @deepseek-ai/* 依赖链（实测 import 会 ERR_MODULE_NOT_FOUND），无法直接加载。
 //        已实测 REF 与 FULL 的 dsh-client-modules 内容逐字节相同；适配器行为由
 //        independent.spec.mjs 在 dsh-full 上另做语义级取证。
@@ -498,6 +499,67 @@ if (!realRan) ok('场景 J 跳过（未找到真实 profile）', true, 'skipped'
   const tZ = texts(await expand(Z, meProvider)).join(' ');
   ok('参数值: 未勾选任何档位时不出现入口（无参数值可填）', findClick(await expand(Z, meProvider), '自定义参数值') === null, tZ.slice(0, 160));
 }
+// ================= settings/conflict → 重读分区后带新 revision 重放（回归） =================
+// 复现线上症状：namespace "llm-pi-ai" changed since it was read (expected revision 3, now 4)。
+// 同分区多张 provider 卡 / 设置页自身保存都会推进 revision，面板快照随即过期；
+// 宿主契约（settings/conflict）要求客户端重读并在最新值上重放，而非报错。
+{
+  const conflictBody = (expected, actual) => ({ ok: false, error: { code: 'settings/conflict', message: 'settings namespace "llm-pi-ai" changed since it was read (expected revision ' + expected + ', now ' + actual + ')' } });
+  // 场景 K：首次 mutate 以 revision 7 被拒（实际已是 8）→ 重读 → 以 revision 8 重放 → 成功
+  const viewK2 = JSON.parse(JSON.stringify(viewA)); viewK2.revision = 8;
+  const K = build({ view: viewA });
+  // 首次 describe 返回面板加载时的旧快照（revision 7）；冲突后的重读才看见外部推进到 8。
+  let kDescribes = 0;
+  K.ctx.remote.settings.describe = async () => { kDescribes++; return { ok: true, value: { writable: true, hasDocument: true, namespaces: [kDescribes <= 1 ? viewA : viewK2] } }; };
+  const kMutates = [];
+  K.ctx.remote.settings.mutate = async (ns, ops, rev) => {
+    kMutates.push({ ns, ops, rev });
+    return kMutates.length === 1 ? conflictBody(7, 8) : { ok: true, value: viewK2 };
+  };
+  const treeK = await expand(K, meProvider);
+  const midK = findClick(treeK, '中');
+  ok('场景 K 找到「中」档开关', typeof midK === 'function', typeof midK);
+  if (typeof midK === 'function') {
+    midK();
+    await new Promise((r) => setTimeout(r, 0));
+    const saveK = findClick(await render(K, meProvider), '保存');
+    ok('场景 K 找到「保存」按钮', typeof saveK === 'function', typeof saveK);
+    if (typeof saveK === 'function') {
+      saveK();
+      for (let t = 0; t < 30; t++) await new Promise((r) => setTimeout(r, 0));
+      ok('场景 K 冲突后恰好重试一次（共 2 次 mutate）', kMutates.length === 2, kMutates.length);
+      if (kMutates.length >= 2) {
+        ok('场景 K 首次带过期 revision=7', kMutates[0].rev === 7, String(kMutates[0].rev));
+        ok('场景 K 重试带重读后的 revision=8', kMutates[1].rev === 8, String(kMutates[1].rev));
+        ok('场景 K 重放 ops 与首次一致（值语义重算）', JSON.stringify(kMutates[0].ops) === JSON.stringify(kMutates[1].ops), JSON.stringify(kMutates[1].ops).slice(0, 120));
+        ok('场景 K 重试仍写 llm-pi-ai', kMutates[1].ns === 'llm-pi-ai', kMutates[1].ns);
+      }
+      const textK = texts(await render(K, meProvider)).join(' ');
+      ok('场景 K 重试成功后显示「已保存」', textK.indexOf('已保存') >= 0, textK.slice(0, 200));
+      ok('场景 K 不再把原始冲突文案抛给用户', textK.indexOf('changed since it was read') < 0, textK.slice(0, 200));
+    }
+  }
+  // 场景 L：重读后 revision 仍被并发推进（持续冲突）→ 恰好 2 次尝试后停，给出可读错误
+  const L = build({ view: viewA });
+  L.ctx.remote.settings.describe = async () => ({ ok: true, value: { writable: true, hasDocument: true, namespaces: [viewA] } });
+  let lMutates = 0;
+  L.ctx.remote.settings.mutate = async () => { lMutates++; return conflictBody(7, 8); };
+  const treeL = await expand(L, meProvider);
+  const midL = findClick(treeL, '中');
+  if (typeof midL === 'function') {
+    midL();
+    await new Promise((r) => setTimeout(r, 0));
+    const saveL = findClick(await render(L, meProvider), '保存');
+    if (typeof saveL === 'function') {
+      saveL();
+      for (let t = 0; t < 30; t++) await new Promise((r) => setTimeout(r, 0));
+      ok('场景 L 持续冲突时不无限重试（恰好 2 次尝试）', lMutates === 2, String(lMutates));
+      const textL = texts(await render(L, meProvider)).join(' ');
+      ok('场景 L 给出可读错误而非原始冲突文案', textL.indexOf('保存失败') >= 0 && textL.indexOf('changed since it was read') < 0, textL.slice(0, 220));
+    }
+  }
+}
+
 // ================= 取证来源 = 运行中宿主（自证） =================
 // 直接读运行中宿主的 app.asar，逐包比对 REF 的版本。若 asar 不可读则跳过（不算失败）。
 let asarChecked = false;
@@ -529,9 +591,9 @@ if (!asarChecked) ok('跳过 asar 比对（未找到 app.asar）', true, 'skippe
 // ================= 取证一致性自证 =================
 for (const p of ['dsh-settings', 'dsh-llm-pi-ai', 'dsh-llm-deepseek']) {
   const pj = JSON.parse(fs.readFileSync(path.join(REF, p, 'package.json'), 'utf8'));
-  ok('取证来源 ' + p + ' 版本 = ' + pj.version, /^0\.1\.7/.test(pj.version), pj.version);
+  ok('取证来源 ' + p + ' 版本 = ' + pj.version, /^0\.2\.0/.test(pj.version), pj.version);
 }
-ok('REF 为实机 asar 副本（0.1.7-rc.2）', /^0\.1\.7/.test(JSON.parse(fs.readFileSync(path.join(REF, 'dsh-settings/package.json'), 'utf8')).version), '');
+ok('REF 为实机 asar 副本（0.2.0-rc.2）', /^0\.2\.0/.test(JSON.parse(fs.readFileSync(path.join(REF, 'dsh-settings/package.json'), 'utf8')).version), '');
 ok('FULL 为可运行完整树', fs.existsSync(path.join(FULL, '@deepseek-ai/dsh-llm-pi-ai/lib/index.js')), FULL);
 console.log('');
 for (const r of results) console.log((r.pass ? 'PASS  ' : 'FAIL  ') + r.name + (r.pass ? '' : '   <- ' + r.detail));
